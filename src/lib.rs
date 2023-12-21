@@ -17,6 +17,7 @@ pub fn render(program: &str) -> Result<[[RGB8; 256]; 256], FxytError> {
 
 fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RGB8, FxytError> {
     let mut stack = Vec::with_capacity(8);
+    let mut mode = 0;
 
     for command in commands {
         match command {
@@ -30,10 +31,89 @@ fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RG
                 let top = stack.pop().ok_or(FxytError::StackEmpty)?;
                 stack.push(top * 10 + *d as isize)
             }
-            _ => unimplemented!(),
+            Command::Arithmetic(a) => {
+                let right = stack.pop().ok_or(FxytError::StackEmpty)?;
+                let left = stack.pop().ok_or(FxytError::StackEmpty)?;
+                stack.push(match a {
+                    Arithmetic::Plus => left + right,
+                    Arithmetic::Minus => left - right,
+                    Arithmetic::Times => left * right,
+                    Arithmetic::Divide => {
+                        if right != 0 {
+                            left / right
+                        } else {
+                            match mode {
+                                0 => return Err(FxytError::DivideByZero),
+                                1 => return Ok(RGB8::default()),
+                                2 => return Ok(RGB8::new(255, 0, 0)),
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                    Arithmetic::Modulus => left % right,
+                })
+            }
+            Command::Mode => mode += 1,
+            Command::Comparison(c) => {
+                let right = stack.pop().ok_or(FxytError::StackEmpty)?;
+                let left = stack.pop().ok_or(FxytError::StackEmpty)?;
+                stack.push(match c {
+                    Comparison::Equals => left == right,
+                    Comparison::LessThan => left < right,
+                    Comparison::GreaterThan => left > right,
+                } as isize)
+            }
+            Command::Invert => {
+                let arg = stack.pop().ok_or(FxytError::StackEmpty)?;
+                stack.push((arg == 0) as isize)
+            }
+            Command::Bitwise(b) => {
+                let right = stack.pop().ok_or(FxytError::StackEmpty)?;
+                let left = stack.pop().ok_or(FxytError::StackEmpty)?;
+                stack.push(match b {
+                    Bitwise::Xor => left ^ right,
+                    Bitwise::And => left & right,
+                    Bitwise::Or => left | right,
+                })
+            }
+            Command::Clip => {
+                let arg = stack.pop().ok_or(FxytError::StackEmpty)?;
+                stack.push(arg.clamp(0, 255))
+            }
+            Command::StackOperation(so) => match so {
+                StackOperation::Duplicate => {
+                    let arg = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    stack.push(arg);
+                    stack.push(arg);
+                }
+                StackOperation::Pop => {
+                    stack.pop().ok_or(FxytError::StackEmpty)?;
+                }
+                StackOperation::Swap => {
+                    let right = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    let left = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    stack.push(right);
+                    stack.push(left);
+                }
+                StackOperation::Rotate => {
+                    let top = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    let second = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    let third = stack.pop().ok_or(FxytError::StackEmpty)?;
+                    stack.extend_from_slice(&[second, top, third])
+                }
+            },
+            Command::Loop(inner_commands) => unimplemented!(),
+            Command::FrameInterval => unimplemented!(),
+            Command::Debug => {
+                eprintln!("({x}, {y}) -> {:?}", stack);
+                return Err(FxytError::DebugHalt);
+            }
         }
         if stack.len() > 8 {
             return Err(FxytError::StackOverflow);
+        }
+        if mode > 2 {
+            return Err(FxytError::ModeOutOfRange);
         }
     }
 
@@ -178,6 +258,8 @@ pub enum FxytError {
     ModeOutOfRange,
     #[error("Failed to parse command")]
     Parse(#[from] ParseError),
+    #[error("Debug command executed, output halted")]
+    DebugHalt,
 }
 
 #[derive(Error, Debug)]
