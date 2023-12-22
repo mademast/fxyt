@@ -3,7 +3,7 @@ use std::fmt::Display;
 use rgb::RGB8;
 use thiserror::Error;
 
-pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
+pub fn render(program: &str) -> Result<Vec<([[RGB8; 256]; 256], isize)>, FxytError> {
     let parsed = parse(program, 0, 0)?.1;
 
     let t_range = if program.contains(|c| c == 'T' || c == 't') {
@@ -16,23 +16,31 @@ pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
     for t in t_range {
         let mut canvas = [[RGB8::default(); 256]; 256];
 
+        let mut frame_interval = 100;
+
         for x in 0..256 {
             #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
             for y in 0..256 {
-                canvas[255 - y][x] = render_to_pixel(&parsed, Coords::new(x, y, t))?;
+                canvas[255 - y][x] =
+                    render_to_pixel(&parsed, &mut frame_interval, Coords::new(x, y, t))?;
             }
         }
-        frames.push(canvas);
+        frames.push((canvas, frame_interval));
     }
 
     Ok(frames)
 }
 
-fn render_to_pixel(commands: &[Command], coords: Coords) -> Result<RGB8, FxytError> {
+fn render_to_pixel(
+    commands: &[Command],
+    frame_interval: &mut isize,
+    coords: Coords,
+) -> Result<RGB8, FxytError> {
     let mut stack = Vec::with_capacity(8);
     let mut mode = 0;
 
-    if let Some(colour) = render_to_stack(commands, &mut stack, &mut mode, coords)? {
+    if let Some(colour) = render_to_stack(commands, &mut stack, &mut mode, frame_interval, coords)?
+    {
         return Ok(colour);
     }
 
@@ -51,6 +59,7 @@ fn render_to_stack(
     commands: &[Command],
     stack: &mut Vec<isize>,
     mode: &mut u8,
+    frame_interval: &mut isize,
     coords: Coords,
 ) -> Result<Option<RGB8>, FxytError> {
     for command in commands {
@@ -139,13 +148,17 @@ fn render_to_stack(
             Command::Loop(inner_commands) => {
                 let mut loop_counter = stack.pop().ok_or(FxytError::StackEmpty)?;
                 while loop_counter > 0 {
-                    if let Some(colour) = render_to_stack(inner_commands, stack, mode, coords)? {
+                    if let Some(colour) =
+                        render_to_stack(inner_commands, stack, mode, frame_interval, coords)?
+                    {
                         return Ok(Some(colour));
                     }
                     loop_counter -= 1;
                 }
             }
-            Command::FrameInterval => unimplemented!(),
+            Command::FrameInterval => {
+                *frame_interval = stack.pop().ok_or(FxytError::StackEmpty)?;
+            }
             Command::Debug => {
                 eprintln!("{coords} -> {:?}", stack);
                 return Err(FxytError::DebugHalt);
@@ -366,7 +379,7 @@ mod test {
     fn manual_render_check() {
         use crate::render;
         let output = render("XY^").unwrap();
-        write_ppm(output[0]);
+        write_ppm(output[0].0);
     }
 
     fn write_ppm(image_data: [[RGB8; 256]; 256]) {
