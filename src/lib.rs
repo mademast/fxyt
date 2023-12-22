@@ -1,8 +1,10 @@
+use std::fmt::Display;
+
 use rgb::RGB8;
 use thiserror::Error;
 
 pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
-    let parsed = parse(program)?;
+    let parsed = parse(program, 0, 0)?.1;
 
     let t_range = if program.contains(|c| c == 'T' || c == 't') {
         0..256
@@ -17,7 +19,7 @@ pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
         for x in 0..256 {
             #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
             for y in 0..256 {
-                canvas[255 - y][x] = render_to_pixel(&parsed, x, y, t)?;
+                canvas[255 - y][x] = render_to_pixel(&parsed, Coords::new(x, y, t))?;
             }
         }
         frames.push(canvas);
@@ -26,11 +28,11 @@ pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
     Ok(frames)
 }
 
-fn render_to_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RGB8, FxytError> {
+fn render_to_pixel(commands: &[Command], coords: Coords) -> Result<RGB8, FxytError> {
     let mut stack = Vec::with_capacity(8);
     let mut mode = 0;
 
-    if let Some(colour) = render_to_stack(commands, &mut stack, &mut mode, x, y, t)? {
+    if let Some(colour) = render_to_stack(commands, &mut stack, &mut mode, coords)? {
         return Ok(colour);
     }
 
@@ -49,16 +51,14 @@ fn render_to_stack(
     commands: &[Command],
     stack: &mut Vec<isize>,
     mode: &mut u8,
-    x: usize,
-    y: usize,
-    t: usize,
+    coords: Coords,
 ) -> Result<Option<RGB8>, FxytError> {
     for command in commands {
         match command {
             Command::Coordinates(c) => match c {
-                Coordinates::X => stack.push(x as isize),
-                Coordinates::Y => stack.push(y as isize),
-                Coordinates::T => stack.push(t as isize),
+                Coordinates::X => stack.push(coords.x),
+                Coordinates::Y => stack.push(coords.y),
+                Coordinates::T => stack.push(coords.t),
             },
             Command::Integer => stack.push(0),
             Command::Digit(d) => {
@@ -137,13 +137,13 @@ fn render_to_stack(
                 }
             },
             Command::Loop(inner_commands) => {
-                if let Some(colour) = render_to_stack(inner_commands, stack, mode, x, y, t)? {
+                if let Some(colour) = render_to_stack(inner_commands, stack, mode, coords)? {
                     return Ok(Some(colour));
                 }
             }
             Command::FrameInterval => unimplemented!(),
             Command::Debug => {
-                eprintln!("({x}, {y}) -> {:?}", stack);
+                eprintln!("{coords} -> {:?}", stack);
                 return Err(FxytError::DebugHalt);
             }
         }
@@ -158,11 +158,11 @@ fn render_to_stack(
     Ok(None)
 }
 
-fn parse(program: &str) -> Result<Vec<Command>, ParseError> {
+fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Command>), ParseError> {
     let mut parsed = Vec::with_capacity(program.len());
-    let mut unparsed = program.chars();
+    let mut unparsed = program.chars().skip(offset);
 
-    let mut index = 0;
+    let mut index = offset;
     while let Some(c) = unparsed.next() {
         if !c.is_ascii() {
             return Err(ParseError::InvalidCharacter(index));
@@ -207,8 +207,24 @@ fn parse(program: &str) -> Result<Vec<Command>, ParseError> {
                 'R' => StackOperation::Rotate,
                 _ => unreachable!(),
             }),
-            '[' => todo!(), //idea: recursion? add "current loop level" as a parameter to this function? ??
-            ']' => todo!(),
+            '[' => {
+                if nesting >= 8 {
+                    return Err(ParseError::LoopNesting);
+                } else {
+                    let (eaten, loop_body) = parse(program, index + 1, nesting + 1)?;
+                    index += eaten;
+                    unparsed.nth(eaten);
+
+                    Command::Loop(loop_body)
+                }
+            }
+            ']' => {
+                if nesting > 0 {
+                    return Ok((index - offset + 1, parsed));
+                } else {
+                    return Err(ParseError::InvalidCharacter(index));
+                }
+            }
             'F' => Command::FrameInterval,
             'W' => Command::Debug,
 
@@ -220,7 +236,7 @@ fn parse(program: &str) -> Result<Vec<Command>, ParseError> {
         parsed.push(next_command);
     }
 
-    Ok(parsed)
+    Ok((index - offset, parsed))
 }
 
 enum Command {
@@ -234,7 +250,7 @@ enum Command {
     Bitwise(Bitwise),
     Clip,
     StackOperation(StackOperation),
-    Loop(Vec<Command>), //TODO: parsing currently unimplemented due to loop difficulty
+    Loop(Vec<Command>),
     FrameInterval,
     Debug,
 }
@@ -272,6 +288,29 @@ enum StackOperation {
     Rotate,
 }
 
+#[derive(Clone, Copy)]
+struct Coords {
+    x: isize,
+    y: isize,
+    t: isize,
+}
+
+impl Coords {
+    fn new(x: usize, y: usize, t: usize) -> Self {
+        Self {
+            x: x as isize,
+            y: y as isize,
+            t: t as isize,
+        }
+    }
+}
+
+impl Display for Coords {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.t)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum FxytError {
     #[error("RGB value greater than 255 or less than 0")]
@@ -280,8 +319,6 @@ pub enum FxytError {
     StackOverflow,
     #[error("Attempt to read from an empty stack")]
     StackEmpty,
-    #[error("Attempt to enter a loop more than 8 levels deep")]
-    LoopNesting,
     #[error("Attempt to divide by zero in mode 0")]
     DivideByZero,
     #[error("Attempt to increment mode beyond 2")]
@@ -298,6 +335,8 @@ pub enum ParseError {
     InvalidCharacter(usize),
     #[error("Found a bracket with no partner at position `{0}`")]
     BracketMismatch(usize),
+    #[error("Attempt to enter a loop more than 8 levels deep")]
+    LoopNesting,
 }
 
 #[cfg(test)]
