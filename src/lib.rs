@@ -137,8 +137,12 @@ fn render_to_stack(
                 }
             },
             Command::Loop(inner_commands) => {
-                if let Some(colour) = render_to_stack(inner_commands, stack, mode, coords)? {
-                    return Ok(Some(colour));
+                let mut loop_counter = stack.pop().ok_or(FxytError::StackEmpty)?;
+                while loop_counter > 0 {
+                    if let Some(colour) = render_to_stack(inner_commands, stack, mode, coords)? {
+                        return Ok(Some(colour));
+                    }
+                    loop_counter -= 1;
                 }
             }
             Command::FrameInterval => unimplemented!(),
