@@ -17,7 +17,7 @@ pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
         for x in 0..256 {
             #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
             for y in 0..256 {
-                canvas[255 - y][x] = render_pixel(&parsed, x, y, t)?;
+                canvas[255 - y][x] = render_to_pixel(&parsed, x, y, t)?;
             }
         }
         frames.push(canvas);
@@ -26,10 +26,33 @@ pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
     Ok(frames)
 }
 
-fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RGB8, FxytError> {
+fn render_to_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RGB8, FxytError> {
     let mut stack = Vec::with_capacity(8);
     let mut mode = 0;
 
+    if let Some(colour) = render_to_stack(commands, &mut stack, &mut mode, x, y, t)? {
+        return Ok(colour);
+    }
+
+    let blue = stack.pop().unwrap_or_default();
+    let green = stack.pop().unwrap_or_default();
+    let red = stack.pop().unwrap_or_default();
+
+    if red > 255 || green > 255 || blue > 255 || red < 0 || green < 0 || blue < 0 {
+        return Err(FxytError::RgbOutOfRange);
+    }
+
+    Ok(RGB8::new(red as u8, green as u8, blue as u8))
+}
+
+fn render_to_stack(
+    commands: &[Command],
+    stack: &mut Vec<isize>,
+    mode: &mut u8,
+    x: usize,
+    y: usize,
+    t: usize,
+) -> Result<Option<RGB8>, FxytError> {
     for command in commands {
         match command {
             Command::Coordinates(c) => match c {
@@ -55,8 +78,8 @@ fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RG
                         } else {
                             match mode {
                                 0 => return Err(FxytError::DivideByZero),
-                                1 => return Ok(RGB8::default()),
-                                2 => return Ok(RGB8::new(255, 0, 0)),
+                                1 => return Ok(Some(RGB8::default())),
+                                2 => return Ok(Some(RGB8::new(255, 0, 0))),
                                 _ => unreachable!(),
                             }
                         }
@@ -64,7 +87,7 @@ fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RG
                     Arithmetic::Modulus => left % right,
                 })
             }
-            Command::Mode => mode += 1,
+            Command::Mode => *mode += 1,
             Command::Comparison(c) => {
                 let right = stack.pop().ok_or(FxytError::StackEmpty)?;
                 let left = stack.pop().ok_or(FxytError::StackEmpty)?;
@@ -113,7 +136,11 @@ fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RG
                     stack.extend_from_slice(&[second, top, third])
                 }
             },
-            Command::Loop(inner_commands) => unimplemented!(),
+            Command::Loop(inner_commands) => {
+                if let Some(colour) = render_to_stack(inner_commands, stack, mode, x, y, t)? {
+                    return Ok(Some(colour));
+                }
+            }
             Command::FrameInterval => unimplemented!(),
             Command::Debug => {
                 eprintln!("({x}, {y}) -> {:?}", stack);
@@ -123,20 +150,12 @@ fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RG
         if stack.len() > 8 {
             return Err(FxytError::StackOverflow);
         }
-        if mode > 2 {
+        if *mode > 2 {
             return Err(FxytError::ModeOutOfRange);
         }
     }
 
-    let blue = stack.pop().unwrap_or_default();
-    let green = stack.pop().unwrap_or_default();
-    let red = stack.pop().unwrap_or_default();
-
-    if red > 255 || green > 255 || blue > 255 || red < 0 || green < 0 || blue < 0 {
-        return Err(FxytError::RgbOutOfRange);
-    }
-
-    Ok(RGB8::new(red as u8, green as u8, blue as u8))
+    Ok(None)
 }
 
 fn parse(program: &str) -> Result<Vec<Command>, ParseError> {
