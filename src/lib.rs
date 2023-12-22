@@ -1,18 +1,29 @@
 use rgb::RGB8;
 use thiserror::Error;
 
-pub fn render(program: &str) -> Result<[[RGB8; 256]; 256], FxytError> {
+pub fn render(program: &str) -> Result<Vec<[[RGB8; 256]; 256]>, FxytError> {
     let parsed = parse(program)?;
-    let mut canvas = [[RGB8::default(); 256]; 256];
 
-    for x in 0..256 {
-        #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
-        for y in 0..256 {
-            canvas[255 - y][x] = render_pixel(&parsed, x, y, 0)?;
+    let t_range = if program.contains(|c| c == 'T' || c == 't') {
+        0..256
+    } else {
+        0..1
+    };
+
+    let mut frames = Vec::with_capacity(t_range.len());
+    for t in t_range {
+        let mut canvas = [[RGB8::default(); 256]; 256];
+
+        for x in 0..256 {
+            #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
+            for y in 0..256 {
+                canvas[255 - y][x] = render_pixel(&parsed, x, y, t)?;
+            }
         }
+        frames.push(canvas);
     }
 
-    Ok(canvas)
+    Ok(frames)
 }
 
 fn render_pixel(commands: &[Command], x: usize, y: usize, t: usize) -> Result<RGB8, FxytError> {
@@ -280,7 +291,7 @@ mod test {
     fn basic() {
         use crate::*;
         let output = render("XY^").unwrap();
-        write_ppm(output);
+        write_ppm(output[0]);
     }
 
     fn write_ppm(image_data: [[RGB8; 256]; 256]) {
