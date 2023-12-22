@@ -3,7 +3,12 @@ use std::fmt::Display;
 use rgb::RGB8;
 use thiserror::Error;
 
-pub fn render(program: &str) -> Result<Vec<([[RGB8; 256]; 256], isize)>, FxytError> {
+pub struct Frame {
+    pub interval: isize,
+    pub image: [[RGB8; 256]; 256],
+}
+
+pub fn render(program: &str) -> Result<Vec<Frame>, FxytError> {
     let parsed = parse(program, 0, 0)?.1;
 
     let t_range = if program.contains(|c| c == 'T' || c == 't') {
@@ -25,7 +30,11 @@ pub fn render(program: &str) -> Result<Vec<([[RGB8; 256]; 256], isize)>, FxytErr
                     render_to_pixel(&parsed, &mut frame_interval, Coords::new(x, y, t))?;
             }
         }
-        frames.push((canvas, frame_interval));
+
+        frames.push(Frame {
+            interval: frame_interval,
+            image: canvas,
+        });
     }
 
     Ok(frames)
@@ -379,7 +388,7 @@ mod test {
     fn manual_render_check() {
         use crate::render;
         let output = render("XY^").unwrap();
-        write_ppm(output[0].0);
+        write_ppm(output[0].image);
     }
 
     fn write_ppm(image_data: [[RGB8; 256]; 256]) {
