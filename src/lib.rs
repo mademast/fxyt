@@ -3,11 +3,6 @@ use std::fmt::Display;
 use rgb::RGB8;
 use thiserror::Error;
 
-pub struct Frame {
-    pub interval: isize,
-    pub image: [[RGB8; 256]; 256],
-}
-
 pub fn render(program: &str) -> Result<Vec<Frame>, FxytError> {
     let parsed = parse(program, 0, 0)?.1;
 
@@ -267,6 +262,12 @@ fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Comman
     }
 
     Ok((index - offset, parsed))
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Frame {
+    pub interval: isize,
+    pub image: [[RGB8; 256]; 256],
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
