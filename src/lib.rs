@@ -239,6 +239,7 @@ fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Comman
     Ok((index - offset, parsed))
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 enum Command {
     Coordinates(Coordinates),
     Integer,
@@ -255,12 +256,14 @@ enum Command {
     Debug,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Coordinates {
     X,
     Y,
     T,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Arithmetic {
     Plus,
     Minus,
@@ -269,18 +272,21 @@ enum Arithmetic {
     Modulus,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Comparison {
     Equals,
     LessThan,
     GreaterThan,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Bitwise {
     Xor,
     And,
     Or,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum StackOperation {
     Duplicate,
     Pop,
@@ -346,6 +352,7 @@ mod test {
     use std::io::Write;
 
     #[test]
+    #[ignore = "file i/o"]
     fn basic() {
         use crate::*;
         let output = render("XY^").unwrap();
@@ -363,5 +370,52 @@ mod test {
                 // write!(file, "{}{}{}", pixel.r, pixel.g, pixel.b).unwrap()
             }
         }
+    }
+
+    #[test]
+    fn loop_parsing() {
+        use crate::*;
+        use Command::*;
+        let program = "NN5[N10+]";
+        assert_eq!(
+            (
+                9,
+                vec![
+                    Integer,
+                    Integer,
+                    Digit(5),
+                    Loop(vec![
+                        Integer,
+                        Digit(1),
+                        Digit(0),
+                        Arithmetic(crate::Arithmetic::Plus)
+                    ])
+                ]
+            ),
+            parse(program, 0, 0).unwrap()
+        )
+    }
+    #[test]
+    fn loop_parsing_doubly_nested() {
+        use crate::*;
+        use Command::*;
+        let program = "NN5[N10[N4+]]";
+        assert_eq!(
+            (
+                13,
+                vec![
+                    Integer,
+                    Integer,
+                    Digit(5),
+                    Loop(vec![
+                        Integer,
+                        Digit(1),
+                        Digit(0),
+                        Loop(vec![Integer, Digit(4), Arithmetic(crate::Arithmetic::Plus)])
+                    ])
+                ]
+            ),
+            parse(program, 0, 0).unwrap()
+        )
     }
 }
