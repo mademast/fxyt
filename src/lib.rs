@@ -269,3 +269,30 @@ pub enum ParseError {
     #[error("Found a bracket with no partner at position `{0}`")]
     BracketMismatch(usize),
 }
+
+#[cfg(test)]
+mod test {
+    use rgb::{ComponentSlice, RGB8};
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn basic() {
+        use crate::*;
+        let output = render("XY^").unwrap();
+        write_ppm(output);
+    }
+
+    fn write_ppm(image_data: [[RGB8; 256]; 256]) {
+        let mut file = File::create("output.ppm").unwrap();
+
+        writeln!(file, "P6\n256 256\n255").unwrap();
+
+        for row in image_data {
+            for pixel in row {
+                file.write_all(pixel.as_slice()).unwrap();
+                // write!(file, "{}{}{}", pixel.r, pixel.g, pixel.b).unwrap()
+            }
+        }
+    }
+}
