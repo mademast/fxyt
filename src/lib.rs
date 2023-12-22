@@ -8,7 +8,7 @@ pub fn render(program: &str) -> Result<[[RGB8; 256]; 256], FxytError> {
     for x in 0..256 {
         #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
         for y in 0..256 {
-            canvas[y][x] = render_pixel(&parsed, x, y, 0)?;
+            canvas[255 - y][x] = render_pixel(&parsed, x, y, 0)?;
         }
     }
 
