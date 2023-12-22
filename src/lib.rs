@@ -355,14 +355,16 @@ pub enum ParseError {
 
 #[cfg(test)]
 mod test {
+    use crate::{parse, Command};
     use rgb::{ComponentSlice, RGB8};
     use std::fs::File;
     use std::io::Write;
+    use Command::*;
 
     #[test]
     #[ignore = "file i/o"]
-    fn basic() {
-        use crate::*;
+    fn manual_render_check() {
+        use crate::render;
         let output = render("XY^").unwrap();
         write_ppm(output[0]);
     }
@@ -382,8 +384,6 @@ mod test {
 
     #[test]
     fn loop_parsing() {
-        use crate::*;
-        use Command::*;
         let program = "NN5[N10+]";
         assert_eq!(
             (
@@ -405,8 +405,6 @@ mod test {
     }
     #[test]
     fn loop_parsing_doubly_nested() {
-        use crate::*;
-        use Command::*;
         let program = "NN5[N10[N4+]]";
         assert_eq!(
             (
@@ -428,8 +426,6 @@ mod test {
     }
     #[test]
     fn loop_parsing_many_empty_nested() {
-        use crate::*;
-        use Command::*;
         let program = "[[[[]]]]";
         assert_eq!(
             (8, vec![Loop(vec![Loop(vec![Loop(vec![Loop(vec![])])])])]),
@@ -438,8 +434,6 @@ mod test {
     }
     #[test]
     fn loop_parsing_twice_empty_nested() {
-        use crate::*;
-        use Command::*;
         let program = "[[]]";
         assert_eq!(
             (4, vec![Loop(vec![Loop(vec![])])]),
