@@ -213,7 +213,7 @@ fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Comman
                 } else {
                     let (eaten, loop_body) = parse(program, index + 1, nesting + 1)?;
                     index += eaten;
-                    unparsed.nth(eaten);
+                    unparsed.nth(eaten - 1);
 
                     Command::Loop(loop_body)
                 }
@@ -234,6 +234,10 @@ fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Comman
         index += 1;
 
         parsed.push(next_command);
+    }
+
+    if nesting > 0 {
+        return Err(ParseError::BracketMismatch(offset));
     }
 
     Ok((index - offset, parsed))
@@ -415,6 +419,26 @@ mod test {
                     ])
                 ]
             ),
+            parse(program, 0, 0).unwrap()
+        )
+    }
+    #[test]
+    fn loop_parsing_many_empty_nested() {
+        use crate::*;
+        use Command::*;
+        let program = "[[[[]]]]";
+        assert_eq!(
+            (8, vec![Loop(vec![Loop(vec![Loop(vec![Loop(vec![])])])])]),
+            parse(program, 0, 0).unwrap()
+        )
+    }
+    #[test]
+    fn loop_parsing_twice_empty_nested() {
+        use crate::*;
+        use Command::*;
+        let program = "[[]]";
+        assert_eq!(
+            (4, vec![Loop(vec![Loop(vec![])])]),
             parse(program, 0, 0).unwrap()
         )
     }
