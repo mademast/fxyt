@@ -1,20 +1,20 @@
-use std::io::Write;
+use std::{error::Error, io::Write};
 
 use fxyt::{render, ParseError};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let Some(program) = std::env::args().nth(1) else {
         eprintln!("Error: please pass the FXYT program as a command line argument.");
         eprintln!(r#"For example: `fxyt "XY^"`."#);
         eprintln!(r#"To run the empty program and produce a pure black image, run `fxyt ""`."#);
-        return;
+        return Ok(());
     };
 
     let frames = match render(&program) {
         Ok(frames) => frames,
         Err(e) => {
             eprintln!("Error: {e}");
-            return;
+            return Ok(());
         }
     };
 
@@ -38,5 +38,7 @@ fn main() {
     let gif = gif.build()?; //do a global palette calculation here if any frames don't have their own palettes?
 
     let output_file = std::fs::File::create("output.gif")?;
-    output_file.write_all(gif.into_bytes())?
+    output_file.write_all(gif.into_bytes())?;
+
+    Ok(())
 }
