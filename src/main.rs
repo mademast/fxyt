@@ -11,19 +11,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    let frames = match render(&program) {
-        Ok(frames) => frames,
-        Err(e) => {
-            eprintln!("Error: {e}");
-            return Ok(());
-        }
-    };
+    let frames = render(&program)?;
 
     let mut gif = GifBuilder::default();
     gif.set_resolution(256, 256);
-    //optional:
-    //gif.set_framerate(30);
-    //gif.set_palette(gifed::Palette::Simple);
 
     for frame in frames {
         let mut gif_frame = Frame::from(frame.image);
