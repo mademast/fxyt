@@ -14,15 +14,22 @@ pub fn render(program: &str) -> Result<Vec<Frame>, FxytError> {
 
     let mut frames = Vec::with_capacity(t_range.len());
     for t in t_range {
-        let mut canvas = [[RGB8::default(); 256]; 256];
+        let mut canvas = vec![vec![RGB8::default(); 256]; 256];
 
         let mut frame_interval = 100;
 
         for x in 0..256 {
             #[allow(clippy::needless_range_loop)] //this is cleaner than what clippy wants
             for y in 0..256 {
-                canvas[255 - y][x] =
-                    render_to_pixel(&parsed, &mut frame_interval, Coords::new(x, y, t))?;
+                let temp_fi = 100;
+                canvas[255 - y][x] = render_to_pixel(&parsed, &mut 0, Coords::new(x, y, t))?;
+                if (x, y) == (0, 0) {
+                    if temp_fi >= 0 {
+                        frame_interval = temp_fi as usize;
+                    } else {
+                        return Err(FxytError::FrameIntervalOutOfRange);
+                    }
+                }
             }
         }
 
@@ -264,10 +271,11 @@ fn parse(program: &str, offset: usize, nesting: u8) -> Result<(usize, Vec<Comman
     Ok((index - offset, parsed))
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Frame {
-    pub interval: isize,
-    pub image: [[RGB8; 256]; 256],
+    pub interval: usize,
+    ///always 256x256, row-major
+    pub image: Vec<Vec<RGB8>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -360,6 +368,8 @@ pub enum FxytError {
     DivideByZero,
     #[error("Attempt to increment mode beyond 2")]
     ModeOutOfRange,
+    #[error("Attempt to set negative frame interval on (0,0) cell")]
+    FrameIntervalOutOfRange,
     #[error("Failed to parse command")]
     Parse(#[from] ParseError),
     #[error("Debug command executed, output halted")]
@@ -389,10 +399,10 @@ mod test {
     fn manual_render_check() {
         use crate::render;
         let output = render("XY^").unwrap();
-        write_ppm(output[0].image);
+        write_ppm(&output[0].image);
     }
 
-    fn write_ppm(image_data: [[RGB8; 256]; 256]) {
+    fn write_ppm(image_data: &[Vec<RGB8>]) {
         let mut file = File::create("output.ppm").unwrap();
 
         writeln!(file, "P6\n256 256\n255").unwrap();
