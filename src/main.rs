@@ -1,7 +1,7 @@
 use std::{error::Error, io::Write};
 
 use fxyt::render;
-use gifed::gif_builder::{Frame, GifBuilder};
+use gifed::videogif::{Frame, VideoGif};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let Some(program) = std::env::args().nth(1) else {
@@ -13,11 +13,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let frames = render(&program)?;
 
-    let mut gif = GifBuilder::default();
-    gif.set_resolution(256, 256);
+    let mut gif = VideoGif::new(256, 256);
 
     for frame in frames {
-        let mut gif_frame = Frame::from(frame.image);
+        let mut gif_frame: Frame = frame.image.concat().into();
         gif_frame.set_interval((frame.interval / 10) as u16);
         gif.add_frame(gif_frame);
     }

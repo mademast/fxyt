@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gifed = { git = "https://github.com/novedevo/gifed", version = "0.3.0" }
+gifed = { git = "https://github.com/gennyble/gifed", version = "0.3.0", features = [
+	"videoish",
+] }
 rgb = "0.8.37"
 thiserror = "1.0.51"
